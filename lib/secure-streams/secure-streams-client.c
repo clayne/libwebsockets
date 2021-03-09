@@ -538,10 +538,11 @@ lws_sspc_create(struct lws_context *context, int tsi, const lws_ss_info_t *ssi,
 	__lws_lc_tag(&context->lcg[LWSLCG_SSP_CLIENT], &h->lc, ssi->streamtype);
 
 #if defined(LWS_WITH_SYS_FAULT_INJECTION)
-	h->fi.name = "sspc";
-	h->fi.parent = &context->fi;
-	if (ssi->fi)
-		lws_fi_import(&h->fi, ssi->fi);
+	h->fic.name = "sspc";
+	if (ssi->fic.fi_owner.count)
+		lws_fi_import(&h->fic, &ssi->fic);
+
+	lws_fi_inherit_copy(&h->fic, &context->fic, "ss", ssi->streamtype);
 #endif
 
 	memcpy(&h->ssi, ssi, sizeof(*ssi));
@@ -633,7 +634,7 @@ lws_sspc_destroy(lws_sspc_handle_t **ph)
 	}
 
 #if defined(LWS_WITH_SYS_FAULT_INJECTION)
-	lws_fi_destroy(&h->fi);
+	lws_fi_destroy(&h->fic);
 #endif
 
 	lws_sul_cancel(&h->sul_retry);

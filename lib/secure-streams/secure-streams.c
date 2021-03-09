@@ -742,7 +742,22 @@ lws_ss_create(struct lws_context *context, int tsi, const lws_ss_info_t *ssi,
 	pol = ssi->policy;
 	if (!pol) {
 #endif
+
+#if defined(LWS_WITH_SYS_FAULT_INJECTION)
+		lws_fi_ctx_t temp_fic;
+
+		memset(&temp_fic, 0, sizeof(temp_fic));
+		lws_fi_inherit_copy(&temp_fic, &context->fic, "ss", ssi->streamtype);
+
+		if (lws_fi(&temp_fic, "ss_no_streamtype_policy"))
+			pol = NULL;
+		else
+			pol = lws_ss_policy_lookup(context, ssi->streamtype);
+
+		lws_fi_destroy(&temp_fic);
+#else
 		pol = lws_ss_policy_lookup(context, ssi->streamtype);
+#endif
 		if (!pol) {
 			lwsl_info("%s: unknown stream type %s\n", __func__,
 				  ssi->streamtype);
@@ -816,10 +831,11 @@ lws_ss_create(struct lws_context *context, int tsi, const lws_ss_info_t *ssi,
 				ssi->streamtype ? ssi->streamtype : "nostreamtype");
 
 #if defined(LWS_WITH_SYS_FAULT_INJECTION)
-	h->fi.name = "ss";
-	h->fi.parent = &context->fi;
-	if (ssi->fi)
-		lws_fi_import(&h->fi, ssi->fi);
+	h->fic.name = "ss";
+	if (ssi->fic.fi_owner.count)
+		lws_fi_import(&h->fic, &ssi->fic);
+
+	lws_fi_inherit_copy(&h->fic, &context->fic, "ss", ssi->streamtype);
 #endif
 
 	h->info = *ssi;
@@ -975,7 +991,10 @@ lws_ss_create(struct lws_context *context, int tsi, const lws_ss_info_t *ssi,
 		}
 #endif
 
-		vho = lws_create_vhost(context, &i);
+		if (lws_fi(&ssi->fic, "ss_srv_vh_fail"))
+			vho = NULL;
+		else
+			vho = lws_create_vhost(context, &i);
 		if (!vho) {
 			lwsl_err("%s: failed to create vh", __func__);
 			goto late_bail;
@@ -1187,7 +1206,7 @@ lws_ss_destroy(lws_ss_handle_t **ppss)
 #endif
 
 #if defined(LWS_WITH_SYS_FAULT_INJECTION)
-	lws_fi_destroy(&h->fi);
+	lws_fi_destroy(&h->fic);
 #endif
 
 #if defined(LWS_WITH_SYS_METRICS)

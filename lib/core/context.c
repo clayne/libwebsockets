@@ -395,6 +395,9 @@ lws_create_context(const struct lws_context_creation_info *info)
 	char fatal_exit_defer = 0;
 #endif
 
+	if (lws_fi(&info->fic, "ctx_createfail1"))
+		goto early_bail;
+
 	if (lpf) {
 		lpf+= 2;
 #if defined(LWS_WITH_SYS_ASYNC_DNS)
@@ -420,7 +423,7 @@ lws_create_context(const struct lws_context_creation_info *info)
 	lwsl_notice("%s%s\n", opts_str, s);
 
 	if (lws_plat_context_early_init())
-		return NULL;
+		goto early_bail;
 
 #if defined(LWS_WITH_NETWORK)
 	if (info->count_threads)
@@ -478,7 +481,7 @@ lws_create_context(const struct lws_context_creation_info *info)
 				     map[n].name, NULL, NULL))
 			ok = 1;
 
-		if (!ok) {
+		if (!ok || lws_fi(&info->fic, "ctx_createfail_plugin_init")) {
 			lwsl_err("%s: failed to load %s\n", __func__,
 					map[n].name);
 			goto bail;
@@ -489,7 +492,8 @@ lws_create_context(const struct lws_context_creation_info *info)
 			fatal_exit_defer = !!info->foreign_loops;
 #endif
 
-		if (!evlib_plugin_list) {
+		if (!evlib_plugin_list ||
+		    lws_fi(&info->fic, "ctx_createfail_evlib_plugin")) {
 			lwsl_err("%s: unable to load evlib plugin %s\n",
 					__func__, map[n].name);
 
@@ -558,7 +562,7 @@ lws_create_context(const struct lws_context_creation_info *info)
 
 #endif /* not with ev plugins */
 
-	if (!plev)
+	if (!plev || lws_fi(&info->fic, "ctx_createfail_evlib_sel"))
 		goto fail_event_libs;
 
 #if defined(LWS_WITH_NETWORK)
@@ -569,9 +573,12 @@ lws_create_context(const struct lws_context_creation_info *info)
 #endif
 
 	context = lws_zalloc(size, "context");
-	if (!context) {
-		lwsl_err("No memory for websocket context\n");
-		return NULL;
+	if (!context || lws_fi(&info->fic, "ctx_createfail_oom_ctx")) {
+#if defined(LWS_WITH_SYS_FAULT_INJECTION)
+		lws_free(context);
+#endif
+		lwsl_err("No memory for lws_context\n");
+		goto early_bail;
 	}
 
 #if defined(LWS_WITH_NETWORK)
@@ -597,13 +604,13 @@ lws_create_context(const struct lws_context_creation_info *info)
 	context->pt_serv_buf_size = (unsigned int)s1;
 
 #if defined(LWS_WITH_SYS_FAULT_INJECTION)
-	context->fi.name = "ctx";
-	if (info->fi)
+	context->fic.name = "ctx";
+	if (info->fic.fi_owner.count)
 		/*
 		 * This moves all the lws_fi_t from info->fi to the context fi,
 		 * leaving it empty, so no injection added to default vhost
 		 */
-		lws_fi_import(&context->fi, info->fi);
+		lws_fi_import(&context->fic, &info->fic);
 #endif
 
 
@@ -621,16 +628,6 @@ lws_create_context(const struct lws_context_creation_info *info)
 #else
 						40;
 #endif
-#endif
-
-#if defined(LWS_WITH_UDP)
-	context->udp_loss_sim_tx_pc = info->udp_loss_sim_tx_pc;
-	context->udp_loss_sim_rx_pc = info->udp_loss_sim_rx_pc;
-
-	if (context->udp_loss_sim_tx_pc || context->udp_loss_sim_rx_pc)
-		lwsl_warn("%s: simulating udp loss tx: %d%%, rx: %d%%\n",
-			  __func__, context->udp_loss_sim_tx_pc,
-			  context->udp_loss_sim_rx_pc);
 #endif
 
 #if defined(LWS_WITH_NETWORK)
@@ -788,7 +785,8 @@ lws_create_context(const struct lws_context_creation_info *info)
 #endif
 
 	/* if he gave us names, set the uid / gid */
-	if (lws_plat_drop_app_privileges(context, 0))
+	if (lws_plat_drop_app_privileges(context, 0) ||
+	    lws_fi(&context->fic, "ctx_createfail_privdrop"))
 		goto bail;
 
 #if defined(LWS_WITH_TLS) && defined(LWS_WITH_NETWORK)
@@ -908,7 +906,8 @@ lws_create_context(const struct lws_context_creation_info *info)
 				context->max_fds = (unsigned int)l;
 	}
 #endif
-	if ((int)context->max_fds < 0) {
+	if ((int)context->max_fds < 0 ||
+	     lws_fi(&context->fic, "ctx_createfail_maxfds")) {
 		lwsl_err("%s: problem getting process max files\n",
 			 __func__);
 
@@ -1082,7 +1081,7 @@ lws_create_context(const struct lws_context_creation_info *info)
 
 	if (!info->ka_interval && info->ka_time > 0) {
 		lwsl_err("info->ka_interval can't be 0 if ka_time used\n");
-		return NULL;
+		goto free_context_fail;
 	}
 
 #if defined(LWS_WITH_PEER_LIMITS)
@@ -1108,9 +1107,13 @@ lws_create_context(const struct lws_context_creation_info *info)
 	n = (int)(sizeof(struct lws_pollfd) * context->count_threads *
 	    context->fd_limit_per_thread);
 	context->pt[0].fds = lws_zalloc((unsigned int)n, "fds table");
-	if (context->pt[0].fds == NULL) {
+	if (context->pt[0].fds == NULL ||
+	    lws_fi(&context->fic, "ctx_createfail_oom_fds")) {
+#if defined(LWS_WITH_SYS_FAULT_INJECTION)
+		lws_free(context->pt[0].fds);
+#endif
 		lwsl_err("OOM allocating %d fds\n", context->max_fds);
-		goto bail;
+		goto free_context_fail;
 	}
 #endif
 
@@ -1151,12 +1154,14 @@ lws_create_context(const struct lws_context_creation_info *info)
 	 * loop and if libuv,  have to take care about how to unpick them...
 	 */
 
-	if (lws_plat_init(context, info))
+	if (lws_plat_init(context, info) ||
+	    lws_fi(&context->fic, "ctx_createfail_plat_init"))
 		goto bail_libuv_aware;
 
 #if defined(LWS_WITH_NETWORK)
 	if (context->event_loop_ops->init_context)
-		if (context->event_loop_ops->init_context(context, info))
+		if (context->event_loop_ops->init_context(context, info) ||
+		    lws_fi(&context->fic, "ctx_createfail_evlib_init"))
 			goto bail_libuv_aware;
 
 
@@ -1167,7 +1172,8 @@ lws_create_context(const struct lws_context_creation_info *info)
 			if (info->foreign_loops)
 				lp = info->foreign_loops[n];
 
-			if (context->event_loop_ops->init_pt(context, lp, n))
+			if (context->event_loop_ops->init_pt(context, lp, n) ||
+			    lws_fi(&context->fic, "ctx_createfail_evlib_pt"))
 				goto bail_libuv_aware;
 		}
 
@@ -1243,7 +1249,10 @@ lws_create_context(const struct lws_context_creation_info *info)
 		ii.pprotocols = pp;
 		ii.port = CONTEXT_PORT_NO_LISTEN;
 
-		vh = lws_create_vhost(context, &ii);
+		if (lws_fi(&context->fic, "ctx_createfail_sys_vh"))
+			vh = NULL;
+		else
+			vh = lws_create_vhost(context, &ii);
 		if (!vh) {
 			lwsl_err("%s: failed to create system vhost\n",
 				 __func__);
@@ -1252,7 +1261,8 @@ lws_create_context(const struct lws_context_creation_info *info)
 
 		context->vhost_system = vh;
 
-		if (lws_protocol_init_vhost(vh, NULL)) {
+		if (lws_protocol_init_vhost(vh, NULL) ||
+		    lws_fi(&context->fic, "ctx_createfail_sys_vh_init")) {
 			lwsl_err("%s: failed to init system vhost\n", __func__);
 			goto bail_libuv_aware;
 		}
@@ -1297,15 +1307,17 @@ lws_create_context(const struct lws_context_creation_info *info)
 	 * if he's not saying he'll make his own vhosts later then act
 	 * compatibly and make a default vhost using the data in the info
 	 */
-	if (!lws_check_opt(info->options, LWS_SERVER_OPTION_EXPLICIT_VHOSTS))
-		if (!lws_create_vhost(context, info)) {
+	if (!lws_check_opt(info->options, LWS_SERVER_OPTION_EXPLICIT_VHOSTS)) {
+		if (!lws_create_vhost(context, info) ||
+		    lws_fi(&context->fic, "ctx_createfail_def_vh")) {
 			lwsl_err("Failed to create default vhost\n");
 
 #if defined(LWS_WITH_PEER_LIMITS)
 			lws_free_set_NULL(context->pl_hash_table);
 #endif
-			goto fail_clean_pipes;
+			goto bail;
 		}
+	}
 
 #if defined(LWS_WITH_SECURE_STREAMS)
 
@@ -1318,16 +1330,25 @@ lws_create_context(const struct lws_context_creation_info *info)
 		assert(lws_check_opt(info->options,
 		       LWS_SERVER_OPTION_EXPLICIT_VHOSTS));
 
-		if (lws_ss_policy_parse_begin(context, 0))
+		if (lws_ss_policy_parse_begin(context, 0) ||
+		    lws_fi(&context->fic, "ctx_createfail_ss_pol1")) {
+#if defined(LWS_WITH_SYS_FAULT_INJECTION)
+			lws_ss_policy_parse_abandon(context);
+#endif
 			goto bail_libuv_aware;
+		}
 
 		n = lws_ss_policy_parse(context,
 					(uint8_t *)context->pss_policies_json,
 					strlen(context->pss_policies_json));
-		if (n != LEJP_CONTINUE && n < 0)
+		if ((n != LEJP_CONTINUE && n < 0) ||
+		    lws_fi(&context->fic, "ctx_createfail_ss_pol2")) {
+			lws_ss_policy_parse_abandon(context);
 			goto bail_libuv_aware;
+		}
 
-		if (lws_ss_policy_set(context, "hardcoded")) {
+		if (lws_ss_policy_set(context, "hardcoded") ||
+		    lws_fi(&context->fic, "ctx_createfail_ss_pol3")) {
 			lwsl_err("%s: policy set failed\n", __func__);
 			goto bail_libuv_aware;
 		}
@@ -1336,7 +1357,8 @@ lws_create_context(const struct lws_context_creation_info *info)
 	if (context->pss_policies) {
 		/* user code set the policy objects directly, no parsing step */
 
-		if (lws_ss_policy_set(context, "hardcoded")) {
+		if (lws_ss_policy_set(context, "hardcoded") ||
+		    lws_fi(&context->fic, "ctx_createfail_ss_pol3")) {
 			lwsl_err("%s: policy set failed\n", __func__);
 			goto bail_libuv_aware;
 		}
@@ -1356,7 +1378,8 @@ lws_create_context(const struct lws_context_creation_info *info)
 	 * listening, we don't want the power for anything else
 	 */
 	if (!lws_check_opt(info->options, LWS_SERVER_OPTION_EXPLICIT_VHOSTS))
-		if (lws_plat_drop_app_privileges(context, 1))
+		if (lws_plat_drop_app_privileges(context, 1) ||
+		    lws_fi(&context->fic, "ctx_createfail_privdrop"))
 			goto bail_libuv_aware;
 
 #if defined(LWS_WITH_SYS_STATE)
@@ -1379,6 +1402,12 @@ lws_create_context(const struct lws_context_creation_info *info)
 
 	return context;
 
+early_bail:
+	lws_fi_destroy(&info->fic);
+
+	return NULL;
+
+#if 0
 #if defined(LWS_WITH_NETWORK)
 fail_clean_pipes:
 
@@ -1398,8 +1427,10 @@ fail_clean_pipes:
 
 	return NULL;
 #endif
+#endif
 
 bail:
+	lws_fi_destroy(&info->fic);
 	lws_context_destroy(context);
 
 	return NULL;
@@ -1418,6 +1449,16 @@ fail_event_libs:
 #endif
 
 free_context_fail:
+	if (context) {
+#if defined(LWS_WITH_SYS_SMD)
+		_lws_smd_destroy(context);
+#endif
+#if defined(LWS_WITH_SYS_METRICS)
+		lws_metrics_destroy(context);
+#endif
+		lws_fi_destroy(&context->fic);
+	}
+	lws_fi_destroy(&info->fic);
 	lws_free(context);
 
 	return NULL;
@@ -1896,6 +1937,7 @@ next:
 
 		for (n = 0; n < context->count_threads; n++) {
 			struct lws_context_per_thread *pt = &context->pt[n];
+
 			(void)pt;
 #if defined(LWS_WITH_SEQUENCER)
 			lws_seq_destroy_all_on_pt(pt);
@@ -2058,7 +2100,7 @@ next:
 #endif
 
 #if defined(LWS_WITH_SYS_FAULT_INJECTION)
-		lws_fi_destroy(&context->fi);
+		lws_fi_destroy(&context->fic);
 #endif
 
 		lws_free(context);

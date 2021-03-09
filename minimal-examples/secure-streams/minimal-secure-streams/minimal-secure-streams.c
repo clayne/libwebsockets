@@ -240,6 +240,7 @@ myss_state(void *userobj, void *sh, lws_ss_constate_t state,
 	case LWSSSCS_ALL_RETRIES_FAILED:
 		/* if we're out of retries, we want to close the app and FAIL */
 		interrupted = 1;
+		bad = 2;
 		break;
 	case LWSSSCS_QOS_ACK_REMOTE:
 		lwsl_notice("%s: LWSSSCS_QOS_ACK_REMOTE\n", __func__);
@@ -512,7 +513,10 @@ int main(int argc, const char **argv)
 
 	lws_context_destroy(context);
 
-	lwsl_user("Completed: %s\n", bad ? "failed" : "OK");
+	if (!bad)
+		lwsl_user("Completed: OK\n");
+	else
+		lwsl_err("Completed: failed, ret %d\n", bad);
 
 	return bad;
 }

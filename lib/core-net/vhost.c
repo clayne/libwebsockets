@@ -596,14 +596,15 @@ lws_create_vhost(struct lws_context *context,
 			info->iface ? info->iface : "", info->port);
 
 #if defined(LWS_WITH_SYS_FAULT_INJECTION)
-	vh->fi.name = "vh";
-	vh->fi.parent = &context->fi;
-	if (info->fi)
+	vh->fic.name = "vh";
+	if (info->fic.fi_owner.count)
 		/*
 		 * This moves all the lws_fi_t from info->fi to the vhost fi,
 		 * leaving it empty
 		 */
-		lws_fi_import(&vh->fi, info->fi);
+		lws_fi_import(&vh->fic, &info->fic);
+
+	lws_fi_inherit_copy(&vh->fic, &context->fic, "vh", vh->name);
 #endif
 
 #if defined(LWS_ROLE_H1) || defined(LWS_ROLE_H2)
@@ -1441,7 +1442,7 @@ __lws_vhost_destroy2(struct lws_vhost *vh)
 	lws_dll2_remove(&vh->vh_being_destroyed_list);
 
 #if defined(LWS_WITH_SYS_FAULT_INJECTION)
-	lws_fi_destroy(&vh->fi);
+	lws_fi_destroy(&vh->fic);
 #endif
 
 	__lws_lc_untag(&vh->lc);

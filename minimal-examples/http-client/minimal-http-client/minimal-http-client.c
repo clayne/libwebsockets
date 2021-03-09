@@ -39,6 +39,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
 		lwsl_err("CLIENT_CONNECTION_ERROR: %s\n",
 			 in ? (char *)in : "(null)");
 		interrupted = 1;
+		bad = 3;
 		break;
 
 	case LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP:
@@ -57,6 +58,10 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
 			lws_h2_client_stream_long_poll_rxonly(wsi);
 		}
 #endif
+
+		if (lws_fi_user_wsi_fi(wsi, "user_reject_at_est"))
+			return -1;
+
 		break;
 
 #if defined(LWS_WITH_HTTP_BASIC_AUTH)
@@ -92,17 +97,10 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
 					dotstar);
 		}
 #endif
-#if 0  /* enable to dump the html */
-		{
-			const char *p = in;
-
-			while (len--)
-				if (*p < 0x7f)
-					putchar(*p++);
-				else
-					putchar('.');
-		}
+#if 0
+		lwsl_hexdump_notice(in, len);
 #endif
+
 		return 0; /* don't passthru */
 
 	/* uninterpreted http content */
@@ -111,6 +109,9 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
 			char buffer[1024 + LWS_PRE];
 			char *px = buffer + LWS_PRE;
 			int lenx = sizeof(buffer) - LWS_PRE;
+
+			if (lws_fi_user_wsi_fi(wsi, "user_reject_at_rx"))
+				return -1;
 
 			if (lws_http_client_read(wsi, &px, &lenx) < 0)
 				return -1;
@@ -253,8 +254,17 @@ system_notify_cb(lws_state_manager_t *mgr, lws_state_notify_link_t *link,
 
 	i.protocol = protocols[0].name;
 	i.pwsi = &client_wsi;
+	i.fi_wsi_name = "user";
 
-	return !lws_client_connect_via_info(&i);
+	if (!lws_client_connect_via_info(&i)) {
+		lwsl_err("Client creation failed\n");
+		interrupted = 1;
+		bad = 2;
+
+		return 1;
+	}
+
+	return 0;
 }
 
 int main(int argc, const char **argv)
@@ -283,7 +293,7 @@ int main(int argc, const char **argv)
 	info.protocols = protocols;
 	info.user = &args;
 	info.register_notifier_list = na;
-       info.connect_timeout_secs = 30;
+	info.connect_timeout_secs = 30;
 
 	/*
 	 * since we know this lws context is only ever going to be used with
@@ -321,7 +331,11 @@ int main(int argc, const char **argv)
 		n = lws_service(context, 0);
 
 	lws_context_destroy(context);
-	lwsl_user("Completed: %s\n", bad ? "failed" : "OK");
+
+	if (!bad)
+		lwsl_user("Completed: OK\n");
+	else
+		lwsl_err("Completed: failed, returning %d\n", bad);
 
 	return bad;
 }

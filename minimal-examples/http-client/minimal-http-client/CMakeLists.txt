@@ -8,6 +8,7 @@ include(LwsCheckRequirements)
 set(SAMP lws-minimal-http-client)
 set(SRCS minimal-http-client.c)
 
+set(has_fault_injection 1)
 set(has_h2 1)
 set(requirements 1)
 require_lws_config(LWS_ROLE_H1 1 requirements)
@@ -15,6 +16,7 @@ require_lws_config(LWS_WITH_CLIENT 1 requirements)
 require_lws_config(LWS_WITH_SYS_STATE 1 requirements)
 
 require_lws_config(LWS_ROLE_H2 1 has_h2)
+require_lws_config(LWS_WITH_SYS_FAULT_INJECTION 1 has_fault_injection)
 
 if (requirements)
 	add_executable(${SAMP} ${SRCS})
@@ -27,15 +29,28 @@ if (requirements)
 			add_test(NAME http-client-warmcat COMMAND lws-minimal-http-client )
 			list(APPEND mytests http-client-warmcat)
 		endif()
+
+
 		add_test(NAME http-client-warmcat-h1 COMMAND lws-minimal-http-client  --h1)
 		set_tests_properties(${mytests} PROPERTIES
 				     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/minimal-examples/http-client/minimal-http-client
 				     TIMEOUT 20)
 				     
+		if (has_fault_injection)
+			list(APPEND mytests http-client-fi-dnsfail)
+			add_test(NAME http-client-fi-dnsfail COMMAND lws-minimal-http-client  --fault-injection "wsi=user/dnsfail")
+			set_tests_properties(http-client-fi-dnsfail PROPERTIES WILL_FAIL TRUE)
+			
+			list(APPEND mytests http-client-fi-connfail)
+			add_test(NAME http-client-fi-connfail COMMAND lws-minimal-http-client  --fault-injection "wsi=user/connfail")
+			set_tests_properties(http-client-fi-connfail PROPERTIES WILL_FAIL TRUE)		
+		endif()
+				     
+				     
     		if (DEFINED ENV{SAI_OVN})
 			set_tests_properties(${mytests} PROPERTIES
 					     FIXTURES_REQUIRED "res_http_client_warmcat")
-		endif()
+		endif()		
 	
 	endif()
 
