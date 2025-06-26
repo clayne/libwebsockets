@@ -66,6 +66,7 @@ static const struct lws_http_mount mount_upload = {
 	/* .basic_auth_login_file */	"./ba-passwords",
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 /* wire up /get URLs to the upload directory (protected by basic auth) */
@@ -91,6 +92,7 @@ static const struct lws_http_mount mount_get = {
 	/* .basic_auth_login_file */	"./ba-passwords",
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 /* wire up / to serve from ./mount-origin (protected by basic auth) */
@@ -116,6 +118,7 @@ static const struct lws_http_mount mount = {
 	/* .basic_auth_login_file */	"./ba-passwords",
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 /* pass config options to the deaddrop plugin using pvos */

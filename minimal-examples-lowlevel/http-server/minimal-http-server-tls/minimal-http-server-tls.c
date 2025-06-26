@@ -53,6 +53,7 @@ static const struct lws_http_mount
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 	},
 #endif
 	mount = {
@@ -80,6 +81,7 @@ static const struct lws_http_mount
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 #if !defined(WIN32)

@@ -282,6 +282,7 @@ static const struct lws_http_mount mount_ziptest_uncomm = {
 	NULL,
 	NULL,
 	NULL,
+	NULL,
 }, mount_ziptest = {
 	(struct lws_http_mount *)&mount_ziptest_uncomm,			/* linked-list pointer to next*/
 	"/ziptest",		/* mountpoint in URL namespace on this vhost */
@@ -300,6 +301,7 @@ static const struct lws_http_mount mount_ziptest_uncomm = {
 	0,
 	LWSMPRO_FILE,	/* origin points to a callback */
 	8,			/* strlen("/ziptest"), ie length of the mountpoint */
+	NULL,
 	NULL,
 	NULL,
 	NULL,
@@ -324,6 +326,7 @@ static const struct lws_http_mount mount_ziptest_uncomm = {
 	NULL,
 	NULL,
 	NULL,
+	NULL,
 }, mount = {
 	/* .mount_next */		&mount_post,	/* linked-list "next" */
 	/* .mountpoint */		"/",		/* mountpoint URL */
@@ -345,6 +348,7 @@ static const struct lws_http_mount mount_ziptest_uncomm = {
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 

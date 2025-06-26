@@ -130,6 +130,7 @@ static const struct lws_http_mount mount_dyn = {
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 /* default mount serves the URL space from ./mount-origin */
@@ -155,6 +156,7 @@ static const struct lws_http_mount mount = {
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 void sigint_handler(int sig)

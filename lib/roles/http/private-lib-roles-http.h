@@ -250,6 +250,7 @@ struct _lws_http_mode_related {
 #endif
 #if defined(LWS_WITH_SERVER)
 	unsigned int response_code;
+	const struct lws_protocol_vhost_options *mount_specific_headers;
 #endif
 #ifdef LWS_WITH_CGI
 	struct lws_cgi *cgi; /* wsi being cgi stream have one of these */

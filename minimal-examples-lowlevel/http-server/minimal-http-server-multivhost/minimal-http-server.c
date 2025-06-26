@@ -40,6 +40,7 @@ static const struct lws_http_mount mount_localhost1 = {
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 }, mount_localhost2 = {
 	/* .mount_next */		NULL,		/* linked-list "next" */
 	/* .mountpoint */		"/",		/* mountpoint URL */
@@ -61,6 +62,7 @@ static const struct lws_http_mount mount_localhost1 = {
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 }, mount_localhost3 = {
 	/* .mount_next */		NULL,		/* linked-list "next" */
 	/* .mountpoint */		"/",		/* mountpoint URL */
@@ -82,6 +84,7 @@ static const struct lws_http_mount mount_localhost1 = {
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 void sigint_handler(int sig)

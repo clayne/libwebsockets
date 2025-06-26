@@ -41,6 +41,7 @@ static const struct lws_http_mount mount = {
 	/* .basic_auth_login_file */	NULL,
 	/* .cgi_chroot_path */		NULL,
 	/* .cgi_wd */			NULL,
+	/* .headers */			NULL,
 };
 
 void signal_cb(void *handle, int signum)
